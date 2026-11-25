@@ -1,0 +1,368 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Painel Municipal - CAGED / INEP / SICONFI</title>
+<style>
+  :root {
+    --bg: #0f172a;
+    --card: #1e293b;
+    --card2: #111827;
+    --text: #e2e8f0;
+    --muted: #94a3b8;
+    --accent: #38bdf8;
+    --green: #34d399;
+    --amber: #fbbf24;
+    --red: #f87171;
+    --border: #334155;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+  }
+  header {
+    padding: 16px 24px;
+    border-bottom: 1px solid var(--border);
+    display: flex; align-items: center; justify-content: space-between; gap: 12px;
+    flex-wrap: wrap;
+  }
+  header h1 { margin: 0; font-size: 18px; }
+  header p { margin: 2px 0 0; font-size: 12px; color: var(--muted); }
+  .btn {
+    background: var(--accent); color: #0f172a; border: none; padding: 8px 14px;
+    border-radius: 8px; font-weight: 600; cursor: pointer; font-size: 13px;
+  }
+  .btn.secondary { background: transparent; color: var(--text); border: 1px solid var(--border); }
+  .btn:disabled { opacity: .5; cursor: not-allowed; }
+  main { padding: 20px 24px; max-width: 1200px; margin: 0 auto; }
+  .form {
+    background: var(--card); border: 1px solid var(--border); border-radius: 12px;
+    padding: 16px; display: flex; gap: 12px; flex-wrap: wrap; align-items: end;
+  }
+  .field { display: flex; flex-direction: column; gap: 4px; flex: 1; min-width: 160px; }
+  .field label { font-size: 12px; color: var(--muted); }
+  select, input {
+    background: var(--card2); color: var(--text); border: 1px solid var(--border);
+    padding: 8px 10px; border-radius: 8px; font-size: 14px; width: 100%;
+  }
+  .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 16px; margin-top: 20px; }
+  .card {
+    background: var(--card); border: 1px solid var(--border); border-radius: 12px;
+    padding: 16px; min-height: 180px;
+  }
+  .card h2 { margin: 0 0 4px; font-size: 15px; display: flex; align-items: center; gap: 8px; }
+  .card .sub { font-size: 12px; color: var(--muted); margin-bottom: 12px; }
+  .metric { display: flex; justify-content: space-between; padding: 6px 0; border-bottom: 1px solid var(--border); font-size: 13px; }
+  .metric:last-child { border-bottom: none; }
+  .metric .k { color: var(--muted); }
+  .metric .v { font-weight: 600; }
+  .pos { color: var(--green); }
+  .neg { color: var(--red); }
+  .barwrap { margin-top: 8px; }
+  .barrow { display: flex; align-items: center; gap: 8px; font-size: 12px; margin: 4px 0; }
+  .barrow .label { width: 90px; color: var(--muted); }
+  .bar { flex: 1; height: 8px; background: var(--card2); border-radius: 4px; overflow: hidden; }
+  .bar > span { display: block; height: 100%; background: var(--accent); border-radius: 4px; }
+  .barrow .val { width: 48px; text-align: right; font-weight: 600; }
+  .status { font-size: 12px; color: var(--muted); margin-top: 8px; }
+  .err { color: var(--red); font-size: 12px; }
+  .spinner {
+    display: inline-block; width: 14px; height: 14px; border: 2px solid var(--border);
+    border-top-color: var(--accent); border-radius: 50%; animation: spin 0.8s linear infinite;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  .modal-back {
+    position: fixed; inset: 0; background: rgba(0,0,0,.6); display: none;
+    align-items: center; justify-content: center; z-index: 50;
+  }
+  .modal-back.open { display: flex; }
+  .modal {
+    background: var(--card); border: 1px solid var(--border); border-radius: 12px;
+    padding: 20px; width: 90%; max-width: 520px;
+  }
+  .modal h3 { margin: 0 0 12px; }
+  .modal .field { margin-bottom: 10px; }
+  .modal-actions { display: flex; gap: 8px; justify-content: flex-end; margin-top: 12px; }
+  .toggle { display: flex; align-items: center; gap: 8px; font-size: 13px; color: var(--muted); }
+  .toggle input { width: auto; }
+  footer { text-align: center; padding: 20px; font-size: 11px; color: var(--muted); }
+</style>
+</head>
+<body>
+<header>
+  <div>
+    <h1>Painel Municipal - Brasil</h1>
+    <p>Cruza CAGED (emprego), INEP (IDEB) e SICONFI (fiscal) para um município.</p>
+  </div>
+  <div style="display:flex; gap:8px; align-items:center;">
+    <label class="toggle"><input type="checkbox" id="demoToggle" /> Usar dados de exemplo</label>
+    <button class="btn secondary" id="settingsBtn">Configurar MCPs</button>
+  </div>
+</header>
+
+<main>
+  <form class="form" id="form">
+    <div class="field">
+      <label for="uf">UF</label>
+      <select id="uf" required>
+        <option value="">Selecione</option>
+        <option>AC</option><option>AL</option><option>AM</option><option>AP</option>
+        <option>BA</option><option>CE</option><option>DF</option><option>ES</option>
+        <option>GO</option><option>MA</option><option>MG</option><option>MS</option>
+        <option>MT</option><option>PA</option><option>PB</option><option>PE</option>
+        <option>PI</option><option>PR</option><option>RJ</option><option>RN</option>
+        <option>RO</option><option>RR</option><option>RS</option><option>SC</option>
+        <option>SE</option><option>SP</option><option>TO</option>
+      </select>
+    </div>
+    <div class="field">
+      <label for="municipio">Município</label>
+      <input id="municipio" placeholder="Ex.: Brasilia" required />
+    </div>
+    <div class="field" style="flex:0 0 auto; min-width:auto;">
+      <label>&nbsp;</label>
+      <button class="btn" type="submit" id="analisarBtn">Analisar</button>
+    </div>
+  </form>
+
+  <div id="loading" class="status" style="display:none; margin-top:12px;">
+    <span class="spinner"></span> Consultando os 3 MCPs...
+  </div>
+
+  <div class="grid">
+    <section class="card" id="cardCaged">
+      <h2>Emprego formal <span style="font-size:11px;color:var(--muted)">(CAGED)</span></h2>
+      <div class="sub">Movimentações de emprego formal (admissões/desligamentos).</div>
+      <div id="cagedBody"><span class="status">Preencha UF e município e clique em Analisar.</span></div>
+    </section>
+
+    <section class="card" id="cardInep">
+      <h2>Educação <span style="font-size:11px;color:var(--muted)">(IDEB / INEP)</span></h2>
+      <div class="sub">IDEB por nível de ensino (último ano disponível).</div>
+      <div id="inepBody"><span class="status">Aguardando análise...</span></div>
+    </section>
+
+    <section class="card" id="cardSiconfi">
+      <h2>Fiscal <span style="font-size:11px;color:var(--muted)">(SICONFI)</span></h2>
+      <div class="sub">Receita, despesa, resultado e pessoal % da RCL.</div>
+      <div id="siconfiBody"><span class="status">Aguardando análise...</span></div>
+    </section>
+  </div>
+</main>
+
+<div class="modal-back" id="modalBack">
+  <div class="modal">
+    <h3>Configurar endpoints MCP</h3>
+    <div class="field"><label>CAGED (base URL)</label><input id="urlCaged" /></div>
+    <div class="field"><label>INEP (base URL)</label><input id="urlInep" /></div>
+    <div class="field"><label>SICONFI (base URL)</label><input id="urlSiconfi" /></div>
+    <p style="font-size:11px;color:var(--muted);">Padrão: http://127.0.0.1:8955 / 8844 / 8944. Salvo no navegador (localStorage).</p>
+    <div class="modal-actions">
+      <button class="btn secondary" id="cancelBtn">Cancelar</button>
+      <button class="btn" id="saveBtn">Salvar</button>
+    </div>
+  </div>
+</div>
+
+<footer>Protótipo de avaliação. Dados públicos (gov.br). Código MIT.</footer>
+
+<script>
+const DEFAULTS = {
+  caged: "http://127.0.0.1:8955",
+  inep: "http://127.0.0.1:8765",
+  siconfi: "http://127.0.0.1:8899",
+};
+function loadUrls() {
+  try { return { ...DEFAULTS, ...JSON.parse(localStorage.getItem("mcpUrls") || "{}") }; }
+  catch { return { ...DEFAULTS }; }
+}
+function saveUrls(u) { localStorage.setItem("mcpUrls", JSON.stringify(u)); }
+let URLS = loadUrls();
+
+function $(id){ return document.getElementById(id); }
+function fmtNum(n){ if (n == null) return "—"; return Number(n).toLocaleString("pt-BR"); }
+function fmtMoney(n){ if (n == null) return "—"; return "R$ " + Number(n).toLocaleString("pt-BR", {minimumFractionDigits:2, maximumFractionDigits:2}); }
+
+async function mcpCall(baseUrl, tool, args) {
+  const res = await fetch(baseUrl.replace(/\/+$/,""), {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ jsonrpc: "2.0", id: Date.now(), method: "tools/call", params: { name: tool, arguments: args } }),
+  });
+  if (!res.ok) throw new Error("HTTP " + res.status);
+  const json = await res.json();
+  if (json.error) throw new Error(json.error.message || "erro MCP");
+  const text = json.result && json.result.content && json.result.content[0] && json.result.content[0].text;
+  if (!text) return json.result;
+  try { return JSON.parse(text); } catch { return { raw: text }; }
+}
+
+// ---------- MOCK (dados de exemplo) ----------
+const MOCK = {
+  caged: { encontrado: true, total: 1, movimentacoes: [
+    { municipio: "BRASILIA", uf: "DF", competencia: "202512", admissoes: 12450, desligamentos: 9820, saldo: 2630, salario_medio: 4820.50 }
+  ]},
+  inep: {
+    anos_iniciais: { encontrado: true, nivel: "anos_iniciais", resultados: [{ municipio: "Brasília", uf: "DF", ideb: 6.4, rede: "Pública", nivel: "anos_iniciais", ano: 2025 }] },
+    anos_finais:   { encontrado: true, nivel: "anos_finais",   resultados: [{ municipio: "Brasília", uf: "DF", ideb: 5.7, rede: "Pública", nivel: "anos_finais",   ano: 2025 }] },
+    ensino_medio:  { encontrado: true, nivel: "ensino_medio",  resultados: [{ municipio: "Brasília", uf: "DF", ideb: 5.1, rede: "Pública", nivel: "ensino_medio",  ano: 2025 }] },
+  },
+  siconfi: { cod_ibge: 5300108, resumo: { receita_total: 18500000000, despesa_total: 17900000000, resultado: 600000000, pessoal_pct_rcl: 48.2, divida_consolidada: 3200000000 } }
+};
+
+function renderCaged(data) {
+  const body = $("cagedBody");
+  if (!data || data.encontrado === false) { body.innerHTML = `<div class="err">${(data && data.mensagem) || "Sem dados"}</div>`; return; }
+  const rows = data.movimentacoes || [];
+  if (!rows.length) { body.innerHTML = `<div class="err">Sem movimentações.</div>`; return; }
+  const r = rows[0];
+  const adm = r["admissões"] ?? r.admissoes;
+  const desl = r.desligamentos;
+  const cls = (n) => (n > 0 ? "pos" : (n < 0 ? "neg" : ""));
+  let html = "";
+  html += `<div class="metric"><span class="k">Competência</span><span class="v">${r.competencia}</span></div>`;
+  html += `<div class="metric"><span class="k">Admissões</span><span class="v pos">${fmtNum(adm)}</span></div>`;
+  html += `<div class="metric"><span class="k">Desligamentos</span><span class="v neg">${fmtNum(desl)}</span></div>`;
+  html += `<div class="metric"><span class="k">Saldo</span><span class="v ${cls(r.saldo)}">${fmtNum(r.saldo)}</span></div>`;
+  html += `<div class="metric"><span class="k">Salário médio</span><span class="v">${fmtMoney(r.salario_medio)}</span></div>`;
+  if (rows.length > 1) {
+    html += `<div class="sub" style="margin-top:8px;">Outras competências: ${rows.slice(1).map(x=>x.competencia).join(", ")}</div>`;
+  }
+  body.innerHTML = html;
+}
+
+function renderInep(data) {
+  const body = $("inepBody");
+  const niveis = ["anos_iniciais","anos_finais","ensino_medio"];
+  const labels = { anos_iniciais: "Anos iniciais", anos_finais: "Anos finais", ensino_medio: "Ensino médio" };
+  let rows = [];
+  let anoRef = null;
+  for (const n of niveis) {
+    const d = data[n];
+    if (d && d.encontrado && d.resultados && d.resultados.length) {
+      const r = d.resultados[0];
+      rows.push({ nivel: n, label: labels[n], ideb: r.ideb, ano: r.ano });
+      if (!anoRef) anoRef = r.ano;
+    }
+  }
+  if (!rows.length) { body.innerHTML = `<div class="err">Sem dados de IDEB.</div>`; return; }
+  let html = "";
+  if (anoRef) html += `<div class="metric"><span class="k">Ano de referência</span><span class="v">${anoRef}</span></div>`;
+  html += `<div class="barwrap">`;
+  for (const r of rows) {
+    const pct = Math.min(100, (Number(r.ideb) / 10) * 100);
+    html += `<div class="barrow"><span class="label">${r.label}</span><div class="bar"><span style="width:${pct}%"></span></div><span class="val">${r.ideb}</span></div>`;
+  }
+  html += `</div>`;
+  body.innerHTML = html;
+}
+
+function renderSiconfi(data) {
+  const body = $("siconfiBody");
+  if (!data || !data.resumo) {
+    body.innerHTML = `<div class="err">${(data && data.erro) || "Sem dados fiscais."}</div>`;
+    return;
+  }
+  const r = data.resumo;
+  const vals = [r.receita_total, r.despesa_total, r.resultado, r.despesa_pessoal_pct_rcl, r.divida_consolidada];
+  if (vals.every(v => v == null)) {
+    body.innerHTML = `<div class="err">Sem dados publicados para ${data.exercicio || "este exercício"} (tente outro ano).</div>` +
+      (data.cod_ibge ? `<div class="status">Código IBGE: ${data.cod_ibge}</div>` : "");
+    return;
+  }
+  let html = "";
+  html += `<div class="metric"><span class="k">Receita total</span><span class="v">${fmtMoney(r.receita_total)}</span></div>`;
+  html += `<div class="metric"><span class="k">Despesa total</span><span class="v">${fmtMoney(r.despesa_total)}</span></div>`;
+  const resCls = (r.resultado != null && r.resultado >= 0) ? "pos" : "neg";
+  html += `<div class="metric"><span class="k">Resultado</span><span class="v ${r.resultado != null ? resCls : ""}">${fmtMoney(r.resultado)}</span></div>`;
+  html += `<div class="metric"><span class="k">Pessoal % RCL</span><span class="v">${r.despesa_pessoal_pct_rcl != null ? r.despesa_pessoal_pct_rcl + "%" : "—"}</span></div>`;
+  html += `<div class="metric"><span class="k">Dívida consolidada</span><span class="v">${fmtMoney(r.divida_consolidada)}</span></div>`;
+  if (data.cod_ibge) html += `<div class="status">Código IBGE: ${data.cod_ibge} · Exercício: ${data.exercicio}</div>`;
+  body.innerHTML = html;
+}
+
+async function analisar(uf, municipio) {
+  $("loading").style.display = "block";
+  $("analisarBtn").disabled = true;
+  $("cagedBody").innerHTML = `<span class="status"><span class="spinner"></span> carregando...</span>`;
+  $("inepBody").innerHTML = `<span class="status"><span class="spinner"></span> carregando...</span>`;
+  $("siconfiBody").innerHTML = `<span class="status"><span class="spinner"></span> carregando...</span>`;
+
+  const demo = $("demoToggle").checked;
+
+  if (demo) {
+    setTimeout(() => {
+      renderCaged(MOCK.caged);
+      renderInep(MOCK.inep);
+      renderSiconfi(MOCK.siconfi);
+      $("loading").style.display = "none";
+      $("analisarBtn").disabled = false;
+    }, 400);
+    return;
+  }
+
+  // CAGED
+  mcpCall(URLS.caged, "saldo_municipio", { municipio, uf })
+    .then(renderCaged).catch(e => $("cagedBody").innerHTML = `<div class="err">Erro: ${e.message}</div>`);
+
+  // INEP (3 niveis em paralelo)
+  const niveis = ["anos_iniciais","anos_finais","ensino_medio"];
+  const inepResults = {};
+  Promise.allSettled(niveis.map(n =>
+    mcpCall(URLS.inep, "ideb_por_municipio", { municipio, uf, nivel: n })
+      .then(d => { inepResults[n] = d; })
+  )).then(() => renderInep(inepResults));
+
+  // SICONFI: buscar_ente -> resumo_fiscal (tenta anos recentes)
+  mcpCall(URLS.siconfi, "buscar_ente", { nome: municipio, uf, esfera: "M", limite: 5 })
+    .then(async (d) => {
+      const ente = (d.entes || [])[0];
+      if (!ente) throw new Error("Município não encontrado no cache SICONFI");
+      let resumo = null, exercicio = null;
+      for (const ano of [2024, 2023, 2022]) {
+        const r = await mcpCall(URLS.siconfi, "resumo_fiscal", { cod_ibge: ente.cod_ibge, exercicio: ano });
+        const vals = [r.receita_total, r.despesa_total, r.resultado, r.despesa_pessoal_pct_rcl, r.divida_consolidada];
+        if (vals.some(v => v != null)) { resumo = r; exercicio = ano; break; }
+        resumo = r; exercicio = ano;
+      }
+      return { cod_ibge: ente.cod_ibge, exercicio, resumo };
+    })
+    .then(renderSiconfi)
+    .catch(e => $("siconfiBody").innerHTML = `<div class="err">Erro: ${e.message}</div>`);
+
+  // esconde loading apos um tempo minimo
+  setTimeout(() => { $("loading").style.display = "none"; $("analisarBtn").disabled = false; }, 800);
+}
+
+$("form").addEventListener("submit", (e) => {
+  e.preventDefault();
+  const uf = $("uf").value;
+  const municipio = $("municipio").value.trim();
+  if (!uf || !municipio) return;
+  analisar(uf, municipio);
+});
+
+// Settings modal
+$("settingsBtn").addEventListener("click", () => {
+  $("urlCaged").value = URLS.caged;
+  $("urlInep").value = URLS.inep;
+  $("urlSiconfi").value = URLS.siconfi;
+  $("modalBack").classList.add("open");
+});
+$("cancelBtn").addEventListener("click", () => $("modalBack").classList.remove("open"));
+$("saveBtn").addEventListener("click", () => {
+  URLS = {
+    caged: $("urlCaged").value.trim() || DEFAULTS.caged,
+    inep: $("urlInep").value.trim() || DEFAULTS.inep,
+    siconfi: $("urlSiconfi").value.trim() || DEFAULTS.siconfi,
+  };
+  saveUrls(URLS);
+  $("modalBack").classList.remove("open");
+});
+</script>
+</body>
+</html>
