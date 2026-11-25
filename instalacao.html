@@ -1,0 +1,1125 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Brasil de Todos MCP — Dados públicos para agentes de IA</title>
+<meta name="description" content="Três servidores MCP gratuitos com dados públicos brasileiros: emprego (CAGED), educação (IDEB/INEP) e finanças públicas (SICONFI). Python puro e SQLite.">
+<meta name="theme-color" content="#08090a">
+<meta property="og:title" content="Brasil de Todos MCP">
+<meta property="og:description" content="O Brasil inteiro, dentro do seu agente. Emprego, educação e finanças públicas em três MCPs gratuitos.">
+<meta property="og:type" content="website">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%2308090a'/%3E%3Ccircle cx='16' cy='16' r='6' fill='%23d8ff4f'/%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400..800&family=Instrument+Serif:ital@0;1&family=Inter+Tight:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg:#08090a;
+    --bg-2:#0b0d0f;
+    --panel:#101214;
+    --line:rgba(244,241,234,.13);
+    --text:#f4f1ea;
+    --muted:#9a978f;
+    --soft:#c9c5bb;
+    --acid:#d8ff4f;
+    --ember:#ff5c35;
+    --sky:#8ab4ff;
+    --display:'Bricolage Grotesque',system-ui,sans-serif;
+    --sans:'Inter Tight',system-ui,sans-serif;
+    --mono:'JetBrains Mono',ui-monospace,monospace;
+    --serif:'Instrument Serif',Georgia,serif;
+  }
+  *{box-sizing:border-box}
+  html{scroll-behavior:smooth;scroll-padding-top:90px}
+  body{
+    margin:0;background:var(--bg);color:var(--text);
+    font-family:var(--sans);font-size:16px;line-height:1.5;
+    -webkit-font-smoothing:antialiased;overflow-x:clip;
+  }
+  ::selection{background:var(--acid);color:#08090a}
+  a{color:inherit;text-decoration:none}
+  button{font:inherit;color:inherit}
+  img,svg{display:block}
+  .wrap{width:min(1240px,calc(100% - 48px));margin-inline:auto}
+  .mono{font-family:var(--mono)}
+  .skip{
+    position:absolute;left:-9999px;top:0;z-index:300;background:var(--acid);color:#08090a;
+    padding:12px 18px;font-family:var(--mono);font-size:12px;
+  }
+  .skip:focus{left:16px;top:16px}
+  .grain{
+    position:fixed;inset:0;z-index:9998;pointer-events:none;opacity:.05;mix-blend-mode:overlay;
+    background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='180' height='180'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+  }
+
+  /* ---------- botões e etiquetas ---------- */
+  .btn{
+    display:inline-flex;align-items:center;justify-content:center;gap:10px;
+    border:1px solid var(--line);border-radius:999px;background:transparent;
+    padding:13px 22px;cursor:pointer;white-space:nowrap;
+    font-family:var(--mono);font-size:11px;letter-spacing:.1em;text-transform:uppercase;
+    transition:background .2s,color .2s,border-color .2s,transform .2s;
+  }
+  .btn:hover{transform:translateY(-1px)}
+  .btn-solid{background:var(--acid);border-color:var(--acid);color:#08090a;font-weight:500}
+  .btn-solid:hover{background:#e7ff86}
+  .btn-ghost{color:var(--text)}
+  .btn-ghost:hover{border-color:var(--text)}
+  .btn-sm{padding:9px 15px;font-size:10px}
+  .btn-lg{padding:16px 28px;font-size:12px}
+  .arrow{display:inline-block;transition:transform .2s}
+  .btn:hover .arrow{transform:translate(2px,-2px)}
+  .eyebrow{
+    display:flex;align-items:center;gap:10px;margin:0 0 14px;
+    font-family:var(--mono);font-size:10px;letter-spacing:.2em;text-transform:uppercase;color:var(--acid);
+  }
+  .eyebrow::before{content:'';width:22px;height:1px;background:currentColor;opacity:.6}
+  .pulse{width:6px;height:6px;border-radius:50%;background:var(--acid);box-shadow:0 0 0 0 rgba(216,255,79,.5);animation:pulse 2.4s infinite}
+  @keyframes pulse{70%{box-shadow:0 0 0 8px rgba(216,255,79,0)}100%{box-shadow:0 0 0 0 rgba(216,255,79,0)}}
+
+  /* ---------- topo ---------- */
+  .topline{border-bottom:1px solid var(--line);background:var(--bg-2)}
+  .topline .wrap{
+    display:flex;justify-content:space-between;gap:16px;padding:9px 0;
+    font-family:var(--mono);font-size:9.5px;letter-spacing:.14em;text-transform:uppercase;color:var(--muted);
+  }
+  .topline b{color:var(--acid);font-weight:400}
+  .nav{
+    position:sticky;top:0;z-index:90;
+    background:rgba(8,9,10,.72);backdrop-filter:blur(18px);-webkit-backdrop-filter:blur(18px);
+    border-bottom:1px solid transparent;transition:background .2s,border-color .2s;
+  }
+  .nav.scrolled{background:rgba(8,9,10,.94);border-bottom-color:var(--line)}
+  .nav-in{display:flex;align-items:center;gap:30px;height:66px}
+  .brand{
+    display:flex;align-items:baseline;gap:3px;flex:none;
+    font-family:var(--display);font-weight:700;font-size:21px;letter-spacing:-.045em;line-height:1;
+  }
+  .brand sup{font-family:var(--mono);font-size:8.5px;font-weight:400;letter-spacing:.12em;text-transform:uppercase;color:var(--acid);transform:translateY(-5px)}
+  .nav-links{display:flex;gap:26px}
+  .nav-links a{
+    font-family:var(--mono);font-size:10px;letter-spacing:.12em;text-transform:uppercase;color:var(--muted);
+    transition:color .2s;
+  }
+  .nav-links a:hover{color:var(--text)}
+  .nav-actions{margin-left:auto;display:flex;align-items:center;gap:8px}
+
+  /* ---------- hero ---------- */
+  .hero{
+    position:relative;min-height:calc(100svh - 100px);
+    display:flex;align-items:center;padding:86px 0 110px;overflow:hidden;
+  }
+  .hero-glow{
+    position:absolute;inset:-20%;z-index:0;
+    background:
+      radial-gradient(48% 48% at 68% 38%,rgba(216,255,79,.11),transparent 62%),
+      radial-gradient(42% 42% at 18% 70%,rgba(138,180,255,.09),transparent 62%),
+      radial-gradient(38% 38% at 82% 82%,rgba(255,92,53,.07),transparent 62%);
+    filter:blur(18px);animation:drift 20s ease-in-out infinite alternate;
+  }
+  @keyframes drift{to{transform:translate3d(-3%,2%,0) scale(1.07)}}
+  .hero-grid{
+    position:absolute;inset:0;z-index:0;opacity:.5;
+    background-image:linear-gradient(var(--line) 1px,transparent 1px),linear-gradient(90deg,var(--line) 1px,transparent 1px);
+    background-size:76px 76px;
+    -webkit-mask-image:radial-gradient(ellipse at 50% 38%,#000 18%,transparent 72%);
+    mask-image:radial-gradient(ellipse at 50% 38%,#000 18%,transparent 72%);
+  }
+  .hero-chart{
+    position:absolute;left:0;right:0;bottom:0;width:100%;height:46%;z-index:1;opacity:.6;
+    -webkit-mask-image:linear-gradient(to top,#000,transparent);
+    mask-image:linear-gradient(to top,#000,transparent);
+  }
+  .hero-chart path{fill:none;stroke-width:1.2;vector-effect:non-scaling-stroke;stroke-dasharray:1;stroke-dashoffset:1;animation:draw 2.8s .3s ease forwards}
+  .hero-chart .l1{stroke:rgba(216,255,79,.55)}
+  .hero-chart .l2{stroke:rgba(138,180,255,.35);animation-delay:.55s}
+  .hero-chart .l3{stroke:rgba(255,92,53,.28);animation-delay:.8s}
+  @keyframes draw{to{stroke-dashoffset:0}}
+  .hero-inner{position:relative;z-index:3;max-width:920px}
+  .hero h1{
+    margin:18px 0 0;font-family:var(--display);font-weight:700;
+    font-size:clamp(52px,9.4vw,138px);line-height:.86;letter-spacing:-.055em;text-wrap:balance;
+  }
+  .hero h1 em{font-family:var(--serif);font-style:italic;font-weight:400;letter-spacing:-.02em;color:var(--acid)}
+  .hero-sub{max-width:54ch;margin:28px 0 0;color:#b3afa5;font-size:clamp(15px,1.3vw,18px)}
+  .hero-cta{display:flex;flex-wrap:wrap;gap:10px;margin-top:34px}
+  .hero-meta{
+    display:flex;flex-wrap:wrap;gap:10px 22px;margin-top:44px;
+    font-family:var(--mono);font-size:9.5px;letter-spacing:.12em;text-transform:uppercase;color:var(--muted);
+  }
+  .hero-meta span{display:flex;align-items:center;gap:7px}
+  .hero-meta span::before{content:'';width:4px;height:4px;border-radius:50%;background:var(--acid)}
+  .floaters{
+    position:absolute;right:max(24px,calc((100vw - 1240px)/2));top:50%;z-index:2;
+    width:248px;transform:translateY(-46%);display:flex;flex-direction:column;gap:14px;
+  }
+  .float{
+    background:rgba(18,20,22,.72);border:1px solid var(--line);border-radius:14px;padding:14px 16px;
+    backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);animation:float 7s ease-in-out infinite;
+  }
+  .float:nth-child(2){margin-left:34px;animation-delay:-2.4s}
+  .float:nth-child(3){margin-left:-8px;animation-delay:-4.2s}
+  @keyframes float{50%{transform:translateY(-9px)}}
+  .fl{font-family:var(--mono);font-size:8.5px;letter-spacing:.14em;text-transform:uppercase;color:var(--muted)}
+  .fv{display:flex;align-items:baseline;gap:6px;margin-top:5px;font-family:var(--display);font-size:27px;font-weight:600;letter-spacing:-.045em;line-height:1}
+  .fv small{font-family:var(--mono);font-size:9px;font-weight:400;letter-spacing:0;color:var(--muted)}
+  .fb{height:3px;margin-top:11px;border-radius:2px;background:rgba(255,255,255,.08);overflow:hidden}
+  .fb i{display:block;height:100%;border-radius:2px;background:var(--acid)}
+
+  /* ---------- revelação ---------- */
+  .reveal.in{animation:revealIn .7s cubic-bezier(.2,.7,.2,1) both}
+  @keyframes revealIn{from{opacity:0;transform:translateY(18px)}to{opacity:1;transform:none}}
+
+  /* ---------- marquee ---------- */
+  .marquee{overflow:hidden;padding:13px 0;background:var(--bg-2);border-top:1px solid var(--line);border-bottom:1px solid var(--line)}
+  .marquee-track{display:flex;width:max-content;animation:marquee 42s linear infinite}
+  .marquee-group{display:flex;flex:none}
+  .marquee-group span{
+    display:flex;align-items:center;gap:22px;padding:0 22px;white-space:nowrap;
+    font-family:var(--mono);font-size:10px;letter-spacing:.18em;text-transform:uppercase;color:var(--muted);
+  }
+  .marquee-group span::after{content:'✦';font-size:8px;color:var(--acid)}
+  @keyframes marquee{to{transform:translateX(-50%)}}
+
+  /* ---------- números ---------- */
+  .stats{padding:64px 0;border-bottom:1px solid var(--line)}
+  .stats-grid{display:grid;grid-template-columns:repeat(4,1fr)}
+  .stat{padding:0 26px;border-left:1px solid var(--line)}
+  .stat:first-child{border-left:0;padding-left:0}
+  .stat b{display:block;font-family:var(--display);font-size:clamp(34px,4.2vw,56px);font-weight:600;letter-spacing:-.05em;line-height:1}
+  .stat span{display:block;margin-top:9px;font-family:var(--mono);font-size:9px;letter-spacing:.14em;text-transform:uppercase;color:var(--muted)}
+
+  /* ---------- seções ---------- */
+  .sec{padding:96px 0;border-bottom:1px solid var(--line)}
+  .sec-head{display:flex;align-items:flex-end;justify-content:space-between;gap:28px;flex-wrap:wrap;margin-bottom:40px}
+  .sec-head > div:first-child{max-width:760px}
+  h2{
+    margin:0;font-family:var(--display);font-weight:700;
+    font-size:clamp(34px,5vw,64px);line-height:.94;letter-spacing:-.045em;text-wrap:balance;
+  }
+  h2 em{font-family:var(--serif);font-style:italic;font-weight:400;letter-spacing:-.02em;color:var(--acid)}
+  .lead{margin:16px 0 0;max-width:60ch;color:#a8a49a;font-size:16px}
+  .lead .mono{color:var(--soft);font-size:.92em}
+
+  /* ---------- filtros e acervo ---------- */
+  .filters{display:flex;gap:6px;flex-wrap:wrap}
+  .filter{
+    border:1px solid var(--line);border-radius:999px;background:transparent;padding:8px 14px;cursor:pointer;
+    font-family:var(--mono);font-size:9.5px;letter-spacing:.1em;text-transform:uppercase;color:var(--muted);
+    transition:background .2s,color .2s,border-color .2s;
+  }
+  .filter:hover{color:var(--text);border-color:rgba(244,241,234,.35)}
+  .filter.on{background:var(--text);border-color:var(--text);color:#08090a}
+  .cards{display:grid;grid-template-columns:repeat(3,1fr);gap:14px}
+  .card{
+    position:relative;display:flex;flex-direction:column;gap:16px;overflow:hidden;
+    padding:18px;border:1px solid var(--line);border-radius:16px;background:var(--panel);
+    cursor:pointer;transition:transform .25s,border-color .25s;
+  }
+  .card::before{
+    content:'';position:absolute;inset:0;pointer-events:none;opacity:0;transition:opacity .25s;
+    background:radial-gradient(120% 80% at 50% 0%,rgba(216,255,79,.07),transparent 62%);
+  }
+  .card:hover{transform:translateY(-4px);border-color:rgba(216,255,79,.42)}
+  .card:hover::before{opacity:1}
+  .card:focus-visible{outline:2px solid var(--acid);outline-offset:3px}
+  .card-top{position:relative;z-index:1;display:flex;align-items:center;justify-content:space-between;gap:10px}
+  .tag{
+    display:inline-block;border:1px solid var(--line);border-radius:999px;padding:4px 9px;
+    font-family:var(--mono);font-size:8.5px;letter-spacing:.14em;text-transform:uppercase;color:var(--muted);
+  }
+  .tag.caged{color:var(--acid);border-color:rgba(216,255,79,.32)}
+  .tag.inep{color:var(--sky);border-color:rgba(138,180,255,.32)}
+  .tag.siconfi{color:#ff8a6b;border-color:rgba(255,92,53,.32)}
+  .card .tool{font-family:var(--mono);font-size:9px;letter-spacing:.02em;color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .viz{
+    position:relative;z-index:1;display:flex;flex-direction:column;justify-content:flex-end;gap:8px;
+    min-height:148px;padding:16px;border:1px solid rgba(255,255,255,.055);border-radius:12px;background:rgba(0,0,0,.24);
+  }
+  .viz .cap{font-family:var(--mono);font-size:8.5px;letter-spacing:.12em;text-transform:uppercase;color:var(--muted)}
+  .viz .big{font-family:var(--display);font-size:42px;font-weight:600;letter-spacing:-.05em;line-height:.9;margin-top:auto}
+  .viz .big small{font-family:var(--mono);font-size:9px;font-weight:400;letter-spacing:0;color:var(--muted);margin-left:5px}
+  .viz .big.up{color:var(--acid)}
+  .viz .big.down{color:var(--ember)}
+  .viz .mini{display:flex;justify-content:space-between;gap:10px;padding-top:6px;border-top:1px solid rgba(255,255,255,.06);font-size:10.5px;color:#a8a49a}
+  .viz .mini b{font-family:var(--mono);font-weight:400;color:#e8e4da;white-space:nowrap}
+  .vrow{display:grid;grid-template-columns:74px 1fr 46px;align-items:center;gap:8px;font-size:10.5px}
+  .vrow .vl{color:#b3afa5;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .vrow .vb{height:5px;border-radius:3px;background:rgba(255,255,255,.07);overflow:hidden}
+  .vrow .vb i{display:block;height:100%;border-radius:3px;background:var(--acid)}
+  .vrow .vv{font-family:var(--mono);font-size:9.5px;text-align:right;color:#d9d5cb}
+  .viz.inep .vb i{background:var(--sky)}
+  .viz.siconfi .vb i{background:var(--ember)}
+  .card-q{position:relative;z-index:1;margin:0;flex:1;font-size:14px;line-height:1.42;color:#e8e4da}
+  .card-open{
+    position:relative;z-index:1;display:flex;align-items:center;justify-content:space-between;gap:10px;
+    padding-top:13px;border-top:1px solid var(--line);
+    font-family:var(--mono);font-size:9.5px;letter-spacing:.1em;text-transform:uppercase;color:var(--muted);
+    transition:color .2s;
+  }
+  .card:hover .card-open{color:var(--text)}
+
+  /* ---------- modal ---------- */
+  .modal{position:fixed;inset:0;z-index:200;display:none}
+  .modal.open{display:grid;place-items:center;padding:16px}
+  .modal-backdrop{position:absolute;inset:0;background:rgba(3,4,5,.8);backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px)}
+  .modal-panel{
+    position:relative;z-index:1;width:min(800px,100%);max-height:min(88vh,920px);overflow:auto;
+    padding:24px;border:1px solid rgba(244,241,234,.16);border-radius:18px;background:#0c0e10;
+    box-shadow:0 40px 120px rgba(0,0,0,.65);
+  }
+  .modal-head{display:flex;align-items:flex-start;justify-content:space-between;gap:16px;margin-bottom:18px}
+  .modal-head h3{margin:9px 0 0;font-family:var(--display);font-size:24px;font-weight:600;letter-spacing:-.03em;line-height:1.1}
+  .icon-btn{
+    display:grid;place-items:center;flex:none;width:34px;height:34px;border:1px solid var(--line);border-radius:50%;
+    background:none;color:var(--muted);font-size:19px;line-height:1;cursor:pointer;transition:color .2s,border-color .2s;
+  }
+  .icon-btn:hover{color:var(--text);border-color:var(--text)}
+  .chat{display:flex;flex-direction:column;gap:10px}
+  .msg{padding:14px 16px;border:1px solid var(--line);border-radius:12px;background:#101214}
+  .msg.user{border-color:rgba(216,255,79,.22);background:rgba(216,255,79,.05)}
+  .msg.assistant{border-color:rgba(138,180,255,.22);background:rgba(138,180,255,.05)}
+  .msg-role{display:block;margin-bottom:8px;font-family:var(--mono);font-size:8.5px;letter-spacing:.14em;text-transform:uppercase;color:var(--muted)}
+  .msg.user .msg-role{color:var(--acid)}
+  .msg.assistant .msg-role{color:var(--sky)}
+  .msg p{margin:0;font-size:14.5px}
+  .msg pre{
+    margin:0;max-height:250px;overflow:auto;white-space:pre-wrap;word-break:break-word;
+    font-family:var(--mono);font-size:11px;line-height:1.65;color:var(--soft);
+  }
+  .msg.assistant p{margin:0 0 8px}
+  .msg.assistant p:last-child{margin-bottom:0}
+  .msg.assistant b{color:var(--acid);font-weight:600}
+
+  /* ---------- como funciona ---------- */
+  .steps{display:grid;grid-template-columns:repeat(3,1fr);gap:14px}
+  .step{display:flex;flex-direction:column;gap:12px;padding:22px;border:1px solid var(--line);border-radius:16px;background:var(--panel)}
+  .step-n{font-family:var(--mono);font-size:9px;letter-spacing:.14em;text-transform:uppercase;color:var(--acid)}
+  .step h3{margin:0;font-family:var(--display);font-size:21px;font-weight:600;letter-spacing:-.025em}
+  .step p{margin:0;flex:1;font-size:14px;color:#a8a49a}
+  .code{
+    padding:14px;border:1px solid var(--line);border-radius:10px;background:#08090a;
+    font-family:var(--mono);font-size:10.5px;line-height:1.7;color:var(--soft);overflow-x:auto;white-space:pre;
+  }
+  .code .c{color:#6c6962}
+  .code .k{color:var(--sky)}
+  .code .s{color:var(--acid)}
+
+  /* ---------- painel ---------- */
+  .console{overflow:hidden;border:1px solid var(--line);border-radius:18px;background:linear-gradient(180deg,#101214,#0b0d0f)}
+  .console-top{display:flex;align-items:center;gap:11px;padding:14px 18px;border-bottom:1px solid var(--line);flex-wrap:wrap}
+  .dot{width:8px;height:8px;border-radius:50%;background:var(--acid);box-shadow:0 0 14px rgba(216,255,79,.65)}
+  .console-title{font-family:var(--mono);font-size:9.5px;letter-spacing:.14em;text-transform:uppercase}
+  .console-note{margin-left:auto;font-family:var(--mono);font-size:8.5px;letter-spacing:.1em;text-transform:uppercase;color:var(--muted)}
+  .cities{display:flex;gap:6px;flex-wrap:wrap;padding:12px 18px;border-bottom:1px solid var(--line)}
+  .city{
+    border:1px solid var(--line);border-radius:999px;background:none;padding:6px 11px;cursor:pointer;
+    font-family:var(--mono);font-size:9px;letter-spacing:.05em;color:var(--muted);transition:background .2s,color .2s,border-color .2s;
+  }
+  .city:hover{color:var(--text);border-color:rgba(244,241,234,.35)}
+  .city.on{background:var(--text);border-color:var(--text);color:#08090a}
+  .console-body{display:grid;grid-template-columns:repeat(3,1fr)}
+  .console-body.swap .pcard{animation:fadeUp .38s ease both}
+  @keyframes fadeUp{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
+  .pcard{min-height:246px;padding:22px;border-left:1px solid var(--line)}
+  .pcard:first-child{border-left:0}
+  .pcard h4{display:flex;justify-content:space-between;gap:8px;margin:0 0 4px;font-family:var(--mono);font-size:9px;font-weight:400;letter-spacing:.14em;text-transform:uppercase;color:var(--muted)}
+  .pcard h4 span{color:#5f5c55;letter-spacing:.06em}
+  .pbig{margin:10px 0 2px;font-family:var(--display);font-size:34px;font-weight:600;letter-spacing:-.045em;line-height:1}
+  .pbig.money{font-size:27px}
+  .pbig.up{color:var(--acid)}
+  .pbig.down{color:var(--ember)}
+  .pbig small{margin-left:4px;font-family:var(--mono);font-size:9px;font-weight:400;letter-spacing:0;color:var(--muted)}
+  .psub{font-family:var(--mono);font-size:8.5px;letter-spacing:.1em;text-transform:uppercase;color:var(--muted)}
+  .prow{display:flex;justify-content:space-between;gap:10px;padding:7px 0;border-bottom:1px solid rgba(244,241,234,.07);font-size:12px}
+  .prow:last-child{border-bottom:0}
+  .prow span:first-child{color:#a8a49a}
+  .prow span:last-child{font-family:var(--mono);font-size:11px}
+  .ibar{height:5px;margin-top:9px;border-radius:3px;background:rgba(255,255,255,.07);overflow:hidden}
+  .ibar i{display:block;height:100%;border-radius:3px;background:var(--acid);transition:width .5s ease}
+  .console-foot{display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap;padding:12px 18px;border-top:1px solid var(--line);font-family:var(--mono);font-size:8.5px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
+
+  /* ---------- instalar ---------- */
+  .tabs{display:flex;gap:4px;flex-wrap:wrap;margin-bottom:14px}
+  .tab{
+    border:1px solid var(--line);border-radius:999px;background:none;padding:8px 14px;cursor:pointer;
+    font-family:var(--mono);font-size:9.5px;letter-spacing:.1em;text-transform:uppercase;color:var(--muted);
+    transition:background .2s,color .2s,border-color .2s;
+  }
+  .tab:hover{color:var(--text);border-color:rgba(244,241,234,.35)}
+  .tab.on{background:var(--text);border-color:var(--text);color:#08090a}
+  .tabpanel{display:none}
+  .tabpanel.on{display:block}
+  .install-box{padding:22px;border:1px solid var(--line);border-radius:16px;background:var(--panel)}
+  .install-hint{margin:0 0 12px;font-size:14px;color:#a8a49a}
+  .install-note{margin:12px 0 0;font-size:12.5px;color:var(--muted)}
+  .codewrap{position:relative}
+  .codewrap .code{padding:16px 58px 16px 16px;font-size:11px;border-radius:10px}
+  .copy{
+    position:absolute;top:9px;right:9px;border:1px solid var(--line);border-radius:7px;background:#101214;
+    padding:5px 9px;cursor:pointer;font-family:var(--mono);font-size:8.5px;letter-spacing:.1em;text-transform:uppercase;color:var(--muted);
+  }
+  .copy:hover{color:var(--text);border-color:var(--text)}
+
+  /* ---------- cta ---------- */
+  .cta-band{position:relative;overflow:hidden;padding:110px 0;text-align:center}
+  .cta-band::before{
+    content:'';position:absolute;inset:0;pointer-events:none;
+    background:radial-gradient(46% 60% at 50% 100%,rgba(216,255,79,.13),transparent 70%);
+  }
+  .cta-band .wrap{position:relative;z-index:1}
+  .cta-band h2{font-size:clamp(44px,7vw,96px)}
+  .cta-band .lead{margin-inline:auto;max-width:52ch}
+  .cta-actions{display:flex;justify-content:center;flex-wrap:wrap;gap:10px;margin-top:32px}
+
+  /* ---------- rodapé ---------- */
+  footer{border-top:1px solid var(--line);padding:56px 0 30px}
+  .foot-grid{display:grid;grid-template-columns:2fr 1fr 1fr;gap:32px}
+  .foot-brand p{max-width:34ch;margin:14px 0 0;font-size:13px;color:var(--muted)}
+  .fcol h5{margin:0 0 12px;font-family:var(--mono);font-size:8.5px;font-weight:400;letter-spacing:.14em;text-transform:uppercase;color:var(--muted)}
+  .fcol a{display:block;padding:4px 0;font-size:13px;color:var(--soft);transition:color .2s}
+  .fcol a:hover{color:var(--acid)}
+  .foot-bottom{
+    display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap;margin-top:44px;padding-top:20px;border-top:1px solid var(--line);
+    font-family:var(--mono);font-size:8.5px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);
+  }
+
+  /* ---------- responsivo ---------- */
+  @media (max-width:1280px){
+    .floaters{display:none}
+    .hero-inner{max-width:100%}
+  }
+  @media (max-width:1080px){
+    .cards{grid-template-columns:repeat(2,1fr)}
+    .foot-grid{grid-template-columns:1fr 1fr}
+    .foot-brand{grid-column:1/-1}
+  }
+  @media (max-width:900px){
+    .nav-links{display:none}
+    .steps{grid-template-columns:1fr}
+    .console-body{grid-template-columns:1fr}
+    .pcard{min-height:0;border-left:0;border-top:1px solid var(--line)}
+    .pcard:first-child{border-top:0}
+    .stats-grid{grid-template-columns:repeat(2,1fr);gap:28px 0}
+    .stat:nth-child(3){border-left:0;padding-left:0}
+    .sec{padding:76px 0}
+  }
+  @media (max-width:640px){
+    .wrap{width:calc(100% - 36px)}
+    .topline .wrap span:first-child{display:none}
+    .topline .wrap{justify-content:flex-end}
+    .nav-in{height:60px;gap:12px}
+    .hero{min-height:auto;padding:64px 0 80px}
+    .hero h1{font-size:clamp(46px,13vw,72px)}
+    .hero-sub{margin-top:22px}
+    .hero-meta{gap:8px 16px;margin-top:34px}
+    .cards{grid-template-columns:1fr}
+    .sec-head{margin-bottom:28px}
+    .filters{margin-top:-8px}
+    .stats{padding:44px 0}
+    .stat{padding:0 16px}
+    .stat b{font-size:34px}
+    .modal-panel{padding:18px;max-height:92vh}
+    .modal-head h3{font-size:20px}
+    .foot-grid{grid-template-columns:1fr 1fr;gap:26px}
+    .foot-brand{grid-column:1/-1}
+    .foot-bottom{flex-direction:column;gap:6px}
+    .cta-band{padding:80px 0}
+  }
+  @media (prefers-reduced-motion:reduce){
+    html{scroll-behavior:auto}
+    *,*::before,*::after{animation-duration:.001ms!important;animation-iteration-count:1!important;transition-duration:.001ms!important}
+    .reveal{opacity:1;transform:none}
+  }
+</style>
+</head>
+<body id="top">
+<a class="skip" href="#acervo">Pular para o acervo</a>
+<div class="grain" aria-hidden="true"></div>
+
+<div class="topline">
+  <div class="wrap">
+    <span>Open data · Python puro · sem chave de API</span>
+    <span>3 MCPs · 15 ferramentas · <b>dados oficiais</b></span>
+  </div>
+</div>
+
+<header class="nav" id="nav">
+  <div class="wrap nav-in">
+    <a class="brand" href="#top">brasil de todos<sup>mcp</sup></a>
+    <nav class="nav-links" aria-label="Navegação principal">
+      <a href="#acervo">Acervo</a>
+      <a href="#como">Como funciona</a>
+      <a href="#painel">Painel</a>
+      <a href="#instalar">Instalar</a>
+    </nav>
+    <div class="nav-actions">
+      <a class="btn btn-solid btn-sm" href="#instalar">Instalar <span class="arrow" aria-hidden="true">→</span></a>
+    </div>
+  </div>
+</header>
+
+<main>
+  <section class="hero">
+    <div class="hero-glow" aria-hidden="true"></div>
+    <div class="hero-grid" aria-hidden="true"></div>
+    <svg class="hero-chart" viewBox="0 0 1200 420" preserveAspectRatio="none" aria-hidden="true">
+      <path class="l1" pathLength="1" d="M0,330 C120,320 180,250 300,268 S470,180 600,210 S780,110 900,140 S1080,80 1200,96"/>
+      <path class="l2" pathLength="1" d="M0,370 C160,350 220,300 340,318 S520,250 640,270 S820,190 940,212 S1100,160 1200,170"/>
+      <path class="l3" pathLength="1" d="M0,290 C140,280 240,210 360,225 S540,150 660,175 S840,70 960,100 S1110,40 1200,52"/>
+    </svg>
+    <div class="wrap hero-inner">
+      <p class="eyebrow"><span class="pulse" aria-hidden="true"></span> Dados públicos · prontos para agentes</p>
+      <h1>O Brasil inteiro,<br><em>dentro</em> do seu agente.</h1>
+      <p class="hero-sub">Emprego, educação e finanças públicas em três servidores MCP gratuitos. Pergunte em português — o agente consulta os dados oficiais e responde com números.</p>
+      <div class="hero-cta">
+        <a class="btn btn-solid" href="#acervo">Explorar o acervo <span class="arrow" aria-hidden="true">→</span></a>
+        <a class="btn btn-ghost" href="#instalar">Instalar em 1 minuto</a>
+      </div>
+      <div class="hero-meta">
+        <span>3 servidores</span><span>15 ferramentas</span><span>Python + SQLite</span>
+      </div>
+    </div>
+    <div class="floaters" aria-hidden="true">
+      <div class="float">
+        <div class="fl">CAGED · 2025.12</div>
+        <div class="fv">+1.440 <small>vagas</small></div>
+        <div class="fb"><i style="width:72%"></i></div>
+      </div>
+      <div class="float">
+        <div class="fl">IDEB · anos finais</div>
+        <div class="fv">4,9 <small>Manaus</small></div>
+        <div class="fb"><i style="width:49%;background:var(--sky)"></i></div>
+      </div>
+      <div class="float">
+        <div class="fl">SICONFI · pessoal</div>
+        <div class="fv">48,2% <small>da RCL</small></div>
+        <div class="fb"><i style="width:80%;background:var(--ember)"></i></div>
+      </div>
+    </div>
+  </section>
+
+  <div class="marquee" aria-hidden="true">
+    <div class="marquee-track">
+      <div class="marquee-group">
+        <span>CAGED</span><span>INEP · IDEB</span><span>SICONFI</span><span>Python stdlib</span><span>SQLite</span><span>JSON-RPC 2.0</span><span>Open data</span><span>5.453 municípios</span><span>1,1 mi de linhas</span><span>Sem API key</span>
+      </div>
+      <div class="marquee-group">
+        <span>CAGED</span><span>INEP · IDEB</span><span>SICONFI</span><span>Python stdlib</span><span>SQLite</span><span>JSON-RPC 2.0</span><span>Open data</span><span>5.453 municípios</span><span>1,1 mi de linhas</span><span>Sem API key</span>
+      </div>
+    </div>
+  </div>
+
+  <section class="stats">
+    <div class="wrap stats-grid reveal">
+      <div class="stat"><b><span data-count="5453">0</span></b><span>municípios no CAGED</span></div>
+      <div class="stat"><b><span data-count="16701">0</span></b><span>municípios no IDEB</span></div>
+      <div class="stat"><b><span data-count="5598">0</span></b><span>entes no SICONFI</span></div>
+      <div class="stat"><b><span data-count="15">0</span></b><span>ferramentas MCP</span></div>
+    </div>
+  </section>
+
+  <section class="sec" id="acervo">
+    <div class="wrap">
+      <div class="sec-head reveal">
+        <div>
+          <p class="eyebrow">01 — acervo</p>
+          <h2>Perguntas que já têm <em>resposta</em>.</h2>
+          <p class="lead">Seis conversas que mostram o MCP em ação. Abra qualquer uma para ver o prompt, a chamada de ferramenta e o JSON que volta. Números de amostra.</p>
+        </div>
+        <div class="filters" role="group" aria-label="Filtrar exemplos">
+          <button class="filter on" type="button" data-filter="todos">Todos</button>
+          <button class="filter" type="button" data-filter="caged">CAGED</button>
+          <button class="filter" type="button" data-filter="inep">INEP</button>
+          <button class="filter" type="button" data-filter="siconfi">SICONFI</button>
+        </div>
+      </div>
+      <div class="cards" id="cards"></div>
+    </div>
+  </section>
+
+  <section class="sec" id="como">
+    <div class="wrap">
+      <div class="sec-head reveal">
+        <div>
+          <p class="eyebrow">02 — como funciona</p>
+          <h2>Conecte. Pergunte. <em>Decida.</em></h2>
+          <p class="lead">Sem ETL, sem planilha, sem chave de API. O agente fala JSON-RPC com o servidor e recebe dados estruturados.</p>
+        </div>
+      </div>
+      <div class="steps">
+        <div class="step reveal">
+          <span class="step-n">01 / conectar</span>
+          <h3>Adicione o servidor</h3>
+          <p>Um comando no Claude Code, Cursor ou VS Code. Os três MCPs falam Streamable HTTP.</p>
+          <div class="code"><span class="c"># Claude Code</span>
+claude mcp add --transport http caged \
+  https://caged.brasildetodosmcp.com.br/</div>
+        </div>
+        <div class="step reveal" style="animation-delay:80ms">
+          <span class="step-n">02 / perguntar</span>
+          <h3>Pergunte em português</h3>
+          <p>O agente escolhe a ferramenta, monta os argumentos e chama o MCP sozinho.</p>
+          <div class="code"><span class="c"># no chat</span>
+“Qual o saldo de emprego
+em Recife em dezembro?”</div>
+        </div>
+        <div class="step reveal" style="animation-delay:160ms">
+          <span class="step-n">03 / decidir</span>
+          <h3>Receba números oficiais</h3>
+          <p>A resposta volta em JSON, pronta para virar tabela, gráfico ou uma decisão.</p>
+          <div class="code"><span class="c"># resposta</span>
+{
+  <span class="k">"saldo"</span>: <span class="s">1440</span>,
+  <span class="k">"admissoes"</span>: <span class="s">18420</span>,
+  <span class="k">"salario_medio"</span>: <span class="s">2310.45</span>
+}</div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="sec" id="painel">
+    <div class="wrap">
+      <div class="sec-head reveal">
+        <div>
+          <p class="eyebrow">03 — painel</p>
+          <h2>Um município, <em>três</em> camadas.</h2>
+          <p class="lead">Emprego, educação e fiscal no mesmo lugar. Esta é uma versão estática com dados de amostra; no deploy completo, o painel consulta os três MCPs ao vivo.</p>
+        </div>
+      </div>
+      <div class="console reveal">
+        <div class="console-top">
+          <span class="dot" aria-hidden="true"></span>
+          <span class="console-title">painel municipal</span>
+          <span class="console-note">dados de demonstração</span>
+        </div>
+        <div class="cities" id="cities" role="group" aria-label="Escolher município"></div>
+        <div class="console-body" id="consoleBody"></div>
+        <div class="console-foot">
+          <span>CAGED 2025.12 · IDEB 2025 · SICONFI 2024</span>
+          <span>cruze os três para ver o município inteiro</span>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="sec" id="instalar">
+    <div class="wrap">
+      <div class="sec-head reveal">
+        <div>
+          <p class="eyebrow">04 — instalar</p>
+          <h2>Conecte em <em>1 minuto.</em></h2>
+          <p class="lead">Os três servidores falam Streamable HTTP. Escolha seu agente e cole. Em produção, os endpoints ficam em <span class="mono">*.brasildetodosmcp.com.br</span>.</p>
+        </div>
+      </div>
+      <div class="install reveal">
+        <div class="tabs" role="tablist" aria-label="Instalação por ferramenta">
+          <button class="tab on" type="button" role="tab" aria-selected="true" aria-controls="panel-claude" data-tab="claude">Claude Code</button>
+          <button class="tab" type="button" role="tab" aria-selected="false" aria-controls="panel-cursor" data-tab="cursor">Cursor</button>
+          <button class="tab" type="button" role="tab" aria-selected="false" aria-controls="panel-vscode" data-tab="vscode">VS Code</button>
+        </div>
+        <div class="tabpanels">
+          <div class="tabpanel on" id="panel-claude" role="tabpanel">
+            <div class="install-box">
+              <p class="install-hint">No terminal, adicione os três servidores:</p>
+              <div class="codewrap">
+                <button class="copy" type="button">copiar</button>
+                <pre class="code"><code>claude mcp add --transport http caged   https://caged.brasildetodosmcp.com.br/
+claude mcp add --transport http inep    https://inep.brasildetodosmcp.com.br/
+claude mcp add --transport http siconfi https://siconfi.brasildetodosmcp.com.br/</code></pre>
+              </div>
+              <p class="install-note">Depois, digite <span class="mono">/mcp</span> no Claude Code para confirmar a conexão.</p>
+            </div>
+          </div>
+          <div class="tabpanel" id="panel-cursor" role="tabpanel">
+            <div class="install-box">
+              <p class="install-hint">Em <span class="mono">~/.cursor/mcp.json</span>, adicione:</p>
+              <div class="codewrap">
+                <button class="copy" type="button">copiar</button>
+                <pre class="code"><code>{
+  "mcpServers": {
+    "caged":   { "url": "https://caged.brasildetodosmcp.com.br/" },
+    "inep":    { "url": "https://inep.brasildetodosmcp.com.br/" },
+    "siconfi": { "url": "https://siconfi.brasildetodosmcp.com.br/" }
+  }
+}</code></pre>
+              </div>
+              <p class="install-note">Reinicie o Cursor e confira os servidores em Settings → MCP.</p>
+            </div>
+          </div>
+          <div class="tabpanel" id="panel-vscode" role="tabpanel">
+            <div class="install-box">
+              <p class="install-hint">Em <span class="mono">.vscode/mcp.json</span>, adicione:</p>
+              <div class="codewrap">
+                <button class="copy" type="button">copiar</button>
+                <pre class="code"><code>{
+  "servers": {
+    "caged":   { "type": "http", "url": "https://caged.brasildetodosmcp.com.br/" },
+    "inep":    { "type": "http", "url": "https://inep.brasildetodosmcp.com.br/" },
+    "siconfi": { "type": "http", "url": "https://siconfi.brasildetodosmcp.com.br/" }
+  }
+}</code></pre>
+              </div>
+              <p class="install-note">O VS Code pede para iniciar os servidores na primeira vez.</p>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="cta-band">
+    <div class="wrap reveal">
+      <p class="eyebrow" style="justify-content:center">05 — conectar</p>
+      <h2>O Brasil no seu <em>agente.</em></h2>
+      <p class="lead">Os três MCPs são servidos direto para a sua IA. Configure uma vez, pergunte em português e receba números oficiais.</p>
+      <div class="cta-actions">
+        <a class="btn btn-solid btn-lg" href="#instalar">Instalar em 1 minuto <span class="arrow" aria-hidden="true">→</span></a>
+        <a class="btn btn-ghost btn-lg" href="#acervo">Ver o acervo</a>
+      </div>
+    </div>
+  </section>
+</main>
+
+<footer>
+  <div class="wrap">
+    <div class="foot-grid">
+      <div class="foot-brand">
+        <a class="brand" href="#top">brasil de todos<sup>mcp</sup></a>
+        <p>Dados públicos brasileiros para agentes de IA. Feito por João Pedro Lustosa.</p>
+      </div>
+      <div class="fcol">
+        <h5>Navegar</h5>
+        <a href="#acervo">Acervo</a>
+        <a href="#como">Como funciona</a>
+        <a href="#painel">Painel</a>
+        <a href="#instalar">Instalar</a>
+      </div>
+      <div class="fcol">
+        <h5>Dados</h5>
+        <a href="https://www.gov.br/trabalho-e-emprego/pt-br" target="_blank" rel="noopener">CAGED · MTE</a>
+        <a href="https://www.gov.br/inep/pt-br" target="_blank" rel="noopener">IDEB · INEP</a>
+        <a href="https://www.tesourotransparente.gov.br/" target="_blank" rel="noopener">SICONFI · Tesouro</a>
+      </div>
+    </div>
+    <div class="foot-bottom">
+      <span>© 2026 Brasil de Todos MCP</span>
+      <span>Demonstração estática · números de amostra</span>
+    </div>
+  </div>
+</footer>
+<div class="modal" id="modal" aria-hidden="true">
+  <div class="modal-backdrop" data-close></div>
+  <div class="modal-panel" role="dialog" aria-modal="true" aria-labelledby="modalTitle">
+    <div class="modal-head">
+      <div>
+        <span class="tag" id="modalTag"></span>
+        <h3 id="modalTitle"></h3>
+      </div>
+      <button class="icon-btn" id="modalClose" type="button" aria-label="Fechar">×</button>
+    </div>
+    <div class="chat">
+      <div class="msg user"><span class="msg-role">você</span><p id="modalPrompt"></p></div>
+      <div class="msg tool"><span class="msg-role">tool call</span><pre id="modalCall"></pre></div>
+      <div class="msg tool"><span class="msg-role">resultado</span><pre id="modalResult"></pre></div>
+      <div class="msg assistant"><span class="msg-role">agente</span><div id="modalAnswer"></div></div>
+    </div>
+  </div>
+</div>
+
+<script>
+(() => {
+  'use strict';
+
+  const nf = new Intl.NumberFormat('pt-BR');
+  const nf1 = new Intl.NumberFormat('pt-BR', { minimumFractionDigits: 1, maximumFractionDigits: 1 });
+  const nf2 = new Intl.NumberFormat('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  const money2 = n => 'R$ ' + nf2.format(n);
+  const bi = n => 'R$ ' + nf1.format(n) + ' bi';
+  const shortMoney = n => {
+    const abs = Math.abs(n);
+    const sign = n < 0 ? '−' : '+';
+    return abs >= 1
+      ? sign + 'R$ ' + nf1.format(abs) + ' bi'
+      : sign + 'R$ ' + nf.format(Math.round(abs * 1000)) + ' mi';
+  };
+
+  const EXAMPLES = [
+    {
+      id: 'recife-saldo',
+      mcp: 'caged',
+      tool: 'saldo_municipio',
+      title: 'Saldo de emprego em Recife',
+      prompt: 'Qual foi o saldo de emprego formal em Recife em dezembro de 2025?',
+      viz: {
+        type: 'big', cap: 'Recife · PE · 2025.12', value: '+1.440', unit: 'vagas', cls: 'up',
+        rows: [['Admissões', '18.420'], ['Desligamentos', '16.980'], ['Salário médio', 'R$ 2.310,45']]
+      },
+      calls: [{ name: 'saldo_municipio', arguments: { municipio: 'Recife', uf: 'PE', competencia: '202512' } }],
+      results: [{ encontrado: true, municipio: 'RECIFE', uf: 'PE', competencia: '202512', admissoes: 18420, desligamentos: 16980, saldo: 1440, salario_medio: 2310.45 }],
+      answer: '<p>Em <b>dezembro de 2025</b>, Recife fechou com <b>+1.440 vagas</b> formais: 18.420 admissões contra 16.980 desligamentos.</p><p>O salário médio ficou em <b>R$ 2.310,45</b>.</p>'
+    },
+    {
+      id: 'sp-ranking',
+      mcp: 'caged',
+      tool: 'ranking_municipios',
+      title: 'Quem mais gerou emprego em SP',
+      prompt: 'Quais municípios de São Paulo mais geraram emprego em dezembro de 2025?',
+      viz: {
+        type: 'bars', cap: 'São Paulo · 2025.12 · saldo',
+        rows: [
+          { label: 'São Paulo', value: '+12.840', pct: 100 },
+          { label: 'Campinas', value: '+3.120', pct: 24 },
+          { label: 'Guarulhos', value: '+2.450', pct: 19 },
+          { label: 'Osasco', value: '+1.980', pct: 15 }
+        ]
+      },
+      calls: [{ name: 'ranking_municipios', arguments: { uf: 'SP', competencia: '202512', limite: 4 } }],
+      results: [{ uf: 'SP', competencia: '202512', ranking: [
+        { municipio: 'São Paulo', saldo: 12840 }, { municipio: 'Campinas', saldo: 3120 },
+        { municipio: 'Guarulhos', saldo: 2450 }, { municipio: 'Osasco', saldo: 1980 }
+      ] }],
+      answer: '<p>São Paulo lidera com folga: <b>+12.840 vagas</b>. Na sequência aparecem Campinas (+3.120), Guarulhos (+2.450) e Osasco (+1.980).</p>'
+    },
+    {
+      id: 'manaus-ideb',
+      mcp: 'inep',
+      tool: 'ideb_por_municipio',
+      title: 'IDEB de Manaus nos três níveis',
+      prompt: 'Como está o IDEB de Manaus nos anos iniciais, finais e ensino médio?',
+      viz: {
+        type: 'bars', cap: 'Manaus · AM · 2025',
+        rows: [
+          { label: 'Anos iniciais', value: '5,8', pct: 58 },
+          { label: 'Anos finais', value: '4,9', pct: 49 },
+          { label: 'Ensino médio', value: '4,4', pct: 44 }
+        ]
+      },
+      calls: [
+        { name: 'ideb_por_municipio', arguments: { municipio: 'Manaus', uf: 'AM', nivel: 'anos_iniciais', ano: 2025 } },
+        { name: 'ideb_por_municipio', arguments: { municipio: 'Manaus', uf: 'AM', nivel: 'anos_finais', ano: 2025 } },
+        { name: 'ideb_por_municipio', arguments: { municipio: 'Manaus', uf: 'AM', nivel: 'ensino_medio', ano: 2025 } }
+      ],
+      results: [
+        { encontrado: true, nivel: 'anos_iniciais', municipio: 'Manaus', uf: 'AM', ano: 2025, ideb: 5.8, rede: 'Pública' },
+        { encontrado: true, nivel: 'anos_finais', municipio: 'Manaus', uf: 'AM', ano: 2025, ideb: 4.9, rede: 'Pública' },
+        { encontrado: true, nivel: 'ensino_medio', municipio: 'Manaus', uf: 'AM', ano: 2025, ideb: 4.4, rede: 'Pública' }
+      ],
+      answer: '<p>Manaus tem <b>5,8</b> nos anos iniciais, <b>4,9</b> nos anos finais e <b>4,4</b> no ensino médio (2025).</p><p>A queda entre a entrada e a saída do fundamental é de <b>0,9 ponto</b>.</p>'
+    },
+    {
+      id: 'ceara-ranking',
+      mcp: 'inep',
+      tool: 'ranking_municipios',
+      title: 'Ranking do IDEB no Ceará',
+      prompt: 'Quais municípios do Ceará têm o maior IDEB nos anos finais?',
+      viz: {
+        type: 'bars', cap: 'Ceará · anos finais · 2025',
+        rows: [
+          { label: 'Sobral', value: '6,9', pct: 69 },
+          { label: 'Eusébio', value: '6,7', pct: 67 },
+          { label: 'Fortaleza', value: '5,6', pct: 56 },
+          { label: 'Caucaia', value: '5,2', pct: 52 }
+        ]
+      },
+      calls: [{ name: 'ranking_municipios', arguments: { uf: 'CE', nivel: 'anos_finais', ano: 2025, limite: 4 } }],
+      results: [{ uf: 'CE', nivel: 'anos_finais', ano: 2025, ranking: [
+        { municipio: 'Sobral', ideb: 6.9 }, { municipio: 'Eusébio', ideb: 6.7 },
+        { municipio: 'Fortaleza', ideb: 5.6 }, { municipio: 'Caucaia', ideb: 5.2 }
+      ] }],
+      answer: '<p>Sobral lidera os anos finais no Ceará com <b>6,9</b>, seguido por Eusébio (6,7), Fortaleza (5,6) e Caucaia (5,2).</p>'
+    },
+    {
+      id: 'bh-pessoal',
+      mcp: 'siconfi',
+      tool: 'resumo_fiscal',
+      title: 'Pessoal na RCL de Belo Horizonte',
+      prompt: 'Qual o comprometimento com pessoal de Belo Horizonte em 2024?',
+      viz: {
+        type: 'big', cap: 'Belo Horizonte · MG · 2024', value: '51,7', unit: '% da RCL', cls: '',
+        rows: [['Receita', 'R$ 18,4 bi'], ['Despesa', 'R$ 17,1 bi'], ['Dívida', 'R$ 2,9 bi']]
+      },
+      calls: [{ name: 'resumo_fiscal', arguments: { cod_ibge: 3106200, exercicio: 2024 } }],
+      results: [{ cod_ibge: 3106200, exercicio: 2024, receita_total: 18400000000, despesa_total: 17100000000, resultado: 1300000000, despesa_pessoal_pct_rcl: 51.7, divida_consolidada: 2900000000 }],
+      answer: '<p>Belo Horizonte comprometeu <b>51,7% da RCL</b> com pessoal em 2024.</p><p>Receita de R$ 18,4 bi, despesa de R$ 17,1 bi e dívida consolidada de R$ 2,9 bi.</p>'
+    },
+    {
+      id: 'poa-resultado',
+      mcp: 'siconfi',
+      tool: 'resumo_fiscal',
+      title: 'Porto Alegre fechou no azul?',
+      prompt: 'Porto Alegre fechou 2024 com resultado positivo?',
+      viz: {
+        type: 'big', cap: 'Porto Alegre · RS · 2024', value: '+R$ 412', unit: 'mi', cls: 'up',
+        rows: [['Receita', 'R$ 9,8 bi'], ['Despesa', 'R$ 9,4 bi'], ['Pessoal', '47,3% da RCL']]
+      },
+      calls: [{ name: 'resumo_fiscal', arguments: { cod_ibge: 4314902, exercicio: 2024 } }],
+      results: [{ cod_ibge: 4314902, exercicio: 2024, receita_total: 9800000000, despesa_total: 9400000000, resultado: 412000000, despesa_pessoal_pct_rcl: 47.3, divida_consolidada: 4600000000 }],
+      answer: '<p>Sim. Porto Alegre fechou 2024 com resultado positivo de <b>R$ 412 milhões</b>: R$ 9,8 bi de receita contra R$ 9,4 bi de despesa.</p><p>O pessoal consumiu <b>47,3% da RCL</b>.</p>'
+    }
+  ];
+
+  const CITIES = {
+    'Brasília/DF': {
+      caged: { adm: 12450, desl: 9820, saldo: 2630, salario: 4820.50 },
+      ideb: { iniciais: 6.4, finais: 5.7, medio: 5.1 },
+      siconfi: { receita: 18.5, despesa: 17.9, resultado: 0.6, pessoal: 48.2, divida: 3.2 }
+    },
+    'São Paulo/SP': {
+      caged: { adm: 98400, desl: 91200, saldo: 7200, salario: 3980.20 },
+      ideb: { iniciais: 6.6, finais: 5.9, medio: 5.4 },
+      siconfi: { receita: 98.4, despesa: 94.1, resultado: 4.3, pessoal: 41.8, divida: 62.5 }
+    },
+    'Recife/PE': {
+      caged: { adm: 18420, desl: 16980, saldo: 1440, salario: 2310.45 },
+      ideb: { iniciais: 5.9, finais: 5.1, medio: 4.6 },
+      siconfi: { receita: 8.9, despesa: 8.6, resultado: 0.3, pessoal: 52.4, divida: 1.8 }
+    },
+    'Manaus/AM': {
+      caged: { adm: 21300, desl: 20150, saldo: 1150, salario: 2640.10 },
+      ideb: { iniciais: 5.8, finais: 4.9, medio: 4.4 },
+      siconfi: { receita: 9.7, despesa: 9.2, resultado: 0.5, pessoal: 49.1, divida: 2.1 }
+    },
+    'Porto Alegre/RS': {
+      caged: { adm: 14980, desl: 14220, saldo: 760, salario: 3420.80 },
+      ideb: { iniciais: 6.1, finais: 5.4, medio: 4.9 },
+      siconfi: { receita: 9.8, despesa: 9.4, resultado: 0.4, pessoal: 47.3, divida: 4.6 }
+    },
+    'Fortaleza/CE': {
+      caged: { adm: 24100, desl: 21900, saldo: 2200, salario: 2180.70 },
+      ideb: { iniciais: 6.5, finais: 5.6, medio: 5.0 },
+      siconfi: { receita: 12.3, despesa: 11.8, resultado: 0.5, pessoal: 50.2, divida: 2.4 }
+    },
+    'Belo Horizonte/MG': {
+      caged: { adm: 27400, desl: 25100, saldo: 2300, salario: 3760.30 },
+      ideb: { iniciais: 6.7, finais: 6.0, medio: 5.5 },
+      siconfi: { receita: 18.4, despesa: 17.1, resultado: 1.3, pessoal: 51.7, divida: 2.9 }
+    },
+    'Salvador/BA': {
+      caged: { adm: 19800, desl: 18100, saldo: 1700, salario: 2450.90 },
+      ideb: { iniciais: 5.6, finais: 4.8, medio: 4.3 },
+      siconfi: { receita: 10.1, despesa: 9.9, resultado: 0.2, pessoal: 53.6, divida: 2.0 }
+    }
+  };
+
+  const cardsEl = document.getElementById('cards');
+
+  function vizHTML(e) {
+    const v = e.viz;
+    if (v.type === 'big') {
+      const rows = (v.rows || []).map(r => `<div class="mini"><span>${r[0]}</span><b>${r[1]}</b></div>`).join('');
+      return `<div class="viz ${e.mcp}"><div class="cap">${v.cap}</div><div class="big ${v.cls || ''}">${v.value}<small>${v.unit || ''}</small></div>${rows}</div>`;
+    }
+    const rows = v.rows.map(r => `<div class="vrow"><span class="vl">${r.label}</span><span class="vb"><i style="width:${r.pct}%"></i></span><span class="vv">${r.value}</span></div>`).join('');
+    return `<div class="viz ${e.mcp}"><div class="cap">${v.cap}</div>${rows}</div>`;
+  }
+
+  function renderCards(filter = 'todos') {
+    const list = EXAMPLES.filter(e => filter === 'todos' || e.mcp === filter);
+    cardsEl.innerHTML = list.map((e, i) => `
+      <article class="card reveal" data-example="${e.id}" tabindex="0" role="button" aria-label="Abrir conversa: ${e.title}" style="animation-delay:${i * 45}ms">
+        <div class="card-top"><span class="tag ${e.mcp}">${e.mcp.toUpperCase()}</span><span class="tool">${e.tool}</span></div>
+        ${vizHTML(e)}
+        <p class="card-q">“${e.prompt}”</p>
+        <span class="card-open">Ver conversa <span aria-hidden="true">→</span></span>
+      </article>`).join('');
+    observeReveals();
+  }
+
+  document.querySelectorAll('.filter').forEach(btn => {
+    btn.addEventListener('click', () => {
+      document.querySelectorAll('.filter').forEach(b => b.classList.remove('on'));
+      btn.classList.add('on');
+      renderCards(btn.dataset.filter);
+    });
+  });
+
+  cardsEl.addEventListener('click', e => {
+    const card = e.target.closest('.card');
+    if (card) openModal(card.dataset.example);
+  });
+  cardsEl.addEventListener('keydown', e => {
+    if (e.key !== 'Enter' && e.key !== ' ') return;
+    const card = e.target.closest('.card');
+    if (!card) return;
+    e.preventDefault();
+    openModal(card.dataset.example);
+  });
+
+  const modal = document.getElementById('modal');
+  const modalTag = document.getElementById('modalTag');
+  const modalTitle = document.getElementById('modalTitle');
+  const modalPrompt = document.getElementById('modalPrompt');
+  const modalCall = document.getElementById('modalCall');
+  const modalResult = document.getElementById('modalResult');
+  const modalAnswer = document.getElementById('modalAnswer');
+  let lastFocus = null;
+
+  function openModal(id) {
+    const e = EXAMPLES.find(x => x.id === id);
+    if (!e) return;
+    modalTag.className = 'tag ' + e.mcp;
+    modalTag.textContent = e.mcp.toUpperCase() + ' · ' + e.tool;
+    modalTitle.textContent = e.title;
+    modalPrompt.textContent = e.prompt;
+    modalCall.textContent = e.calls.map(c => '// ' + c.name + '\n' + JSON.stringify(c, null, 2)).join('\n\n');
+    modalResult.textContent = e.results.map((r, i) => '// ' + (e.calls[i] ? e.calls[i].name : 'resultado') + '\n' + JSON.stringify(r, null, 2)).join('\n\n');
+    modalAnswer.innerHTML = e.answer;
+    lastFocus = document.activeElement;
+    modal.classList.add('open');
+    modal.setAttribute('aria-hidden', 'false');
+    document.body.style.overflow = 'hidden';
+    document.getElementById('modalClose').focus();
+    modal.querySelector('.modal-panel').scrollTop = 0;
+  }
+
+  function closeModal() {
+    modal.classList.remove('open');
+    modal.setAttribute('aria-hidden', 'true');
+    document.body.style.overflow = '';
+    if (lastFocus) lastFocus.focus();
+  }
+
+  document.getElementById('modalClose').addEventListener('click', closeModal);
+  modal.querySelector('.modal-backdrop').addEventListener('click', closeModal);
+  modal.addEventListener('keydown', e => {
+    if (e.key === 'Escape') { closeModal(); return; }
+    if (e.key !== 'Tab') return;
+    const f = [...modal.querySelectorAll('button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])')].filter(el => el.offsetParent !== null);
+    if (!f.length) return;
+    const first = f[0], last = f[f.length - 1];
+    if (e.shiftKey && document.activeElement === first) { e.preventDefault(); last.focus(); }
+    else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first.focus(); }
+  });
+
+  const citiesEl = document.getElementById('cities');
+  const consoleBody = document.getElementById('consoleBody');
+  const cityKeys = Object.keys(CITIES);
+
+  citiesEl.innerHTML = cityKeys.map((k, i) => `<button class="city${i === 0 ? ' on' : ''}" type="button" data-city="${k}">${k}</button>`).join('');
+
+  function renderPanel(key, animate) {
+    const c = CITIES[key];
+    if (!c) return;
+    const cagedCls = c.caged.saldo >= 0 ? 'up' : 'down';
+    const cagedSign = c.caged.saldo > 0 ? '+' : '';
+    const idebRows = [
+      ['Anos iniciais', c.ideb.iniciais],
+      ['Anos finais', c.ideb.finais],
+      ['Ensino médio', c.ideb.medio]
+    ].map(([label, val]) => `<div class="vrow"><span class="vl">${label}</span><span class="vb"><i style="width:${val * 10}%"></i></span><span class="vv">${nf1.format(val)}</span></div>`).join('');
+
+    consoleBody.innerHTML = `
+      <div class="pcard">
+        <h4>CAGED <span>2025.12</span></h4>
+        <div class="pbig ${cagedCls}">${cagedSign}${nf.format(c.caged.saldo)}<small>vagas</small></div>
+        <div class="psub">saldo no mês</div>
+        <div class="prow"><span>Admissões</span><span>${nf.format(c.caged.adm)}</span></div>
+        <div class="prow"><span>Desligamentos</span><span>${nf.format(c.caged.desl)}</span></div>
+        <div class="prow"><span>Salário médio</span><span>${money2(c.caged.salario)}</span></div>
+      </div>
+      <div class="pcard">
+        <h4>IDEB <span>2025</span></h4>
+        <div class="pbig">${nf1.format(c.ideb.finais)}<small>anos finais</small></div>
+        <div class="psub">rede pública</div>
+        ${idebRows}
+      </div>
+      <div class="pcard">
+        <h4>SICONFI <span>2024</span></h4>
+        <div class="pbig money ${c.siconfi.resultado >= 0 ? 'up' : 'down'}">${shortMoney(c.siconfi.resultado)}</div>
+        <div class="psub">resultado fiscal</div>
+        <div class="prow"><span>Receita</span><span>${bi(c.siconfi.receita)}</span></div>
+        <div class="prow"><span>Despesa</span><span>${bi(c.siconfi.despesa)}</span></div>
+        <div class="prow"><span>Pessoal / RCL</span><span>${nf1.format(c.siconfi.pessoal)}%</span></div>
+        <div class="ibar"><i style="width:${Math.min(100, (c.siconfi.pessoal / 60) * 100)}%"></i></div>
+      </div>`;
+
+    if (animate) {
+      consoleBody.classList.remove('swap');
+      void consoleBody.offsetWidth;
+      consoleBody.classList.add('swap');
+    }
+  }
+
+  citiesEl.addEventListener('click', e => {
+    const btn = e.target.closest('.city');
+    if (!btn) return;
+    citiesEl.querySelectorAll('.city').forEach(b => b.classList.remove('on'));
+    btn.classList.add('on');
+    renderPanel(btn.dataset.city, true);
+  });
+
+  document.querySelectorAll('.tab').forEach(tab => {
+    tab.addEventListener('click', () => {
+      document.querySelectorAll('.tab').forEach(t => { t.classList.remove('on'); t.setAttribute('aria-selected', 'false'); });
+      tab.classList.add('on');
+      tab.setAttribute('aria-selected', 'true');
+      document.querySelectorAll('.tabpanel').forEach(p => p.classList.remove('on'));
+      const panel = document.getElementById('panel-' + tab.dataset.tab);
+      if (panel) panel.classList.add('on');
+    });
+  });
+
+  document.querySelectorAll('.copy').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      const code = btn.closest('.codewrap').querySelector('code');
+      if (!code) return;
+      try {
+        await navigator.clipboard.writeText(code.innerText);
+        btn.textContent = 'copiado ✓';
+      } catch {
+        btn.textContent = 'selecione e copie';
+      }
+      setTimeout(() => { btn.textContent = 'copiar'; }, 1600);
+    });
+  });
+
+  const revealObserver = 'IntersectionObserver' in window ? new IntersectionObserver(entries => {
+    entries.forEach(en => {
+      if (!en.isIntersecting) return;
+      en.target.classList.add('in');
+      revealObserver.unobserve(en.target);
+    });
+  }, { threshold: 0.12, rootMargin: '0px 0px -8% 0px' }) : null;
+
+  function observeReveals() {
+    const els = document.querySelectorAll('.reveal:not(.in)');
+    if (!revealObserver) { els.forEach(el => el.classList.add('in')); return; }
+    els.forEach(el => revealObserver.observe(el));
+  }
+
+  const counters = [...document.querySelectorAll('[data-count]')];
+  if ('IntersectionObserver' in window && !matchMedia('(prefers-reduced-motion: reduce)').matches) {
+    const countObserver = new IntersectionObserver((entries, obs) => {
+      entries.forEach(en => {
+        if (!en.isIntersecting) return;
+        obs.unobserve(en.target);
+        const el = en.target;
+        const target = Number(el.dataset.count);
+        const start = performance.now();
+        const tick = now => {
+          const p = Math.min(1, (now - start) / 1100);
+          el.textContent = nf.format(Math.round(target * (1 - Math.pow(1 - p, 3))));
+          if (p < 1) requestAnimationFrame(tick);
+        };
+        requestAnimationFrame(tick);
+      });
+    }, { threshold: 0.5 });
+    counters.forEach(c => countObserver.observe(c));
+  } else {
+    counters.forEach(el => { el.textContent = nf.format(Number(el.dataset.count)); });
+  }
+
+  const nav = document.getElementById('nav');
+  const onScroll = () => nav.classList.toggle('scrolled', window.scrollY > 8);
+  window.addEventListener('scroll', onScroll, { passive: true });
+  onScroll();
+
+  renderCards('todos');
+  renderPanel(cityKeys[0], false);
+})();
+</script>
+</body>
+</html>
